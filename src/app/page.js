@@ -1,69 +1,162 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import styles from "./page.module.css";
 
-export default function Home() {
+function ProductCard({ product, onDelete }) {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
+    <article className={styles.productCard}>
+      <div className={styles.imageContainer}>
         <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+          src={product.thumbnail}
+          alt={product.title}
+          fill
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          className={styles.productImage}
+          unoptimized
         />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.js</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
+      </div>
+      <div className={styles.productDetails}>
+        <span className={styles.category}>{product.category}</span>
+        <h3 className={styles.productTitle}>{product.title}</h3>
+        <p className={styles.description}>{product.description}</p>
+        <div className={styles.cardFooter}>
+          <span className={styles.price}>${product.price.toFixed(2)}</span>
+          {onDelete && (
+            <button
+              className={styles.deleteButton}
+              onClick={() => onDelete(product)}
+              type="button"
+              aria-label={`${product.title} - წაშლა`}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+              წაშლა
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default function Home() {
+  const [products, setProducts] = useState([]);
+  const [deletedProducts, setDeletedProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProducts() {
+      try {
+        const response = await fetch(
+          "https://dummyjson.com/products?limit=20",
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error("პროდუქტების ჩატვირთვა ვერ მოხერხდა.");
+        }
+
+        const data = await response.json();
+
+        if (!Array.isArray(data.products)) {
+          throw new Error("სერვერიდან მიღებული პროდუქტების სია არასწორია.");
+        }
+
+        setProducts(data.products.slice(0, 20));
+      } catch (loadError) {
+        if (!controller.signal.aborted) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "პროდუქტების ჩატვირთვისას მოულოდნელი შეცდომა მოხდა.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadProducts();
+
+    return () => controller.abort();
+  }, []);
+
+  function deleteProduct(productToDelete) {
+    setProducts((currentProducts) =>
+      currentProducts.filter((product) => product.id !== productToDelete.id),
+    );
+    setDeletedProducts((currentDeletedProducts) => [
+      ...currentDeletedProducts,
+      productToDelete,
+    ]);
+  }
+
+  return (
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <p className={styles.eyebrow}>ონლაინ მაღაზია</p>
+          <h1>პროდუქტები</h1>
+          <p className={styles.subtitle}>
+            აღმოაჩინე ჩვენი რჩეული პროდუქტები
           </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        </header>
+
+        {isLoading && <p className={styles.status}>პროდუქტები იტვირთება...</p>}
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+
+        {!isLoading && !error && (
+          <>
+            <section className={styles.section} aria-labelledby="products-title">
+              <div className={styles.sectionHeading}>
+                <h2 id="products-title">ყველა პროდუქტი</h2>
+                <span className={styles.count}>{products.length} პროდუქტი</span>
+              </div>
+              {products.length > 0 ? (
+                <div className={styles.productGrid}>
+                  {products.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onDelete={deleteProduct}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.emptyState}>ყველა პროდუქტი წაშლილია.</p>
+              )}
+            </section>
+
+            {deletedProducts.length > 0 && (
+              <section
+                className={styles.section}
+                aria-labelledby="deleted-title"
+              >
+                <div className={styles.sectionHeading}>
+                  <h2 id="deleted-title">წაშლილი პროდუქტები</h2>
+                  <span className={styles.count}>
+                    {deletedProducts.length} პროდუქტი
+                  </span>
+                </div>
+                <div className={styles.productGrid}>
+                  {deletedProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </main>
   );
 }
